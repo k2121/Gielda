@@ -93,7 +93,7 @@
 
         .mini-chart-container { display: none; }
 
-        .chart-timer-overlay {
+        .chart-overlay {
             position: absolute;
             background-color: rgba(10, 10, 10, 0.6);
             color: var(--text-primary);
@@ -103,18 +103,13 @@
             font-size: 1rem;
             z-index: 10;
             pointer-events: none;
-        }
-
-        #miniChartTimerDisplay {
-             top: 10px;
-             right: 15px;
-        }
-
-        #mainChartTimerOverlay {
-            top: auto;
             right: 15px;
-            bottom: 40px; /* Changed from 25px */
         }
+
+        #miniChartTimerDisplay { top: 10px; }
+        #mainChartTimerOverlay { bottom: 80px; }
+        #mainChartPriceOverlay { bottom: 105px; font-size: 1.1rem; font-weight: bold;}
+
 
         /* --- STYLES FOR END GAME MODAL --- */
         .modal-overlay {
@@ -138,27 +133,36 @@
             box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
             border: 1px solid var(--border-color);
             width: 90%;
-            max-width: 400px;
+            max-width: 500px;
         }
         .modal-content h2 {
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             margin-bottom: 15px;
+            line-height: 1.4;
         }
         .modal-content .modal-subtitle {
             font-size: 1.1rem;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             color: var(--text-secondary);
         }
+        .modal-result-container {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 25px;
+            gap: 20px;
+        }
+        .modal-result-player { text-align: center; }
+        .modal-result-player p { margin: 0; font-size: 1.1rem; color: var(--text-secondary); }
         .modal-result {
             font-size: 2.2rem;
             font-weight: bold;
-            margin-bottom: 25px;
         }
-        .profit { color: var(--accent-green); }
-        .loss { color: var(--accent-red); }
+        .profit .modal-result { color: var(--accent-green); }
+        .loss .modal-result { color: var(--accent-red); }
         .modal-content .btn {
             width: 100%;
             font-size: 1rem;
+            margin-top: 10px;
         }
 
         @media (max-width: 1280px) { .main-layout { grid-template-columns: 250px 1fr 250px; } }
@@ -196,6 +200,7 @@
             .header h1 { font-size: 1.5rem; }
             .container { padding: 5px; }
             .card { padding: 12px; }
+            .modal-result-container { flex-direction: column; }
         }
     </style>
 </head>
@@ -221,7 +226,8 @@
                 </div>
             </div>
             <div class="chart-container card">
-                <div id="mainChartTimerOverlay" class="chart-timer-overlay"></div>
+                <div id="mainChartPriceOverlay" class="chart-overlay"></div>
+                <div id="mainChartTimerOverlay" class="chart-overlay"></div>
                 <canvas id="mainChartCanvas"></canvas>
             </div>
             <div class="card market-card">
@@ -229,7 +235,7 @@
             </div>
             <div class="right-panel">
                 <div class="card" id="portfolioCard">
-                    <h3>💰 Portfel</h3>
+                    <h3>💰 Portfel (Mysz)</h3>
                     <div class="stat-item"><div class="stat-label">Gotówka</div><div class="stat-value" id="cashDisplay">10 000,00 PLN</div></div>
                     <div class="mobile-grid-row">
                         <div class="stat-item"><div class="stat-label">Akcje</div><div class="stat-value" id="sharesDisplay">0</div></div>
@@ -242,7 +248,7 @@
                 </div>
                 
                 <div class="mini-chart-container card">
-                    <div id="miniChartTimerDisplay" class="chart-timer-overlay"></div>
+                    <div id="miniChartTimerDisplay" class="chart-overlay"></div>
                     <canvas id="miniChartCanvas"></canvas>
                 </div>
 
@@ -258,30 +264,53 @@
         </div>
     </div>
 
-    <!-- NEW: End Game Modal -->
     <div id="endGameModal" class="modal-overlay">
         <div class="modal-content">
-            <h2>Koniec Czasu!</h2>
-            <p class="modal-subtitle">Twój ostateczny wynik:</p>
-            <p class="modal-result"><span id="finalProfitLoss">0,00 PLN</span></p>
+            <h2 id="winnerMessage">Mysz Wygrała!</h2>
+            <p class="modal-subtitle">Ostateczne wyniki:</p>
+            <div class="modal-result-container">
+                <div id="p1Result" class="modal-result-player">
+                    <p>Mysz</p>
+                    <span class="modal-result" id="finalProfitLossP1">0,00 PLN</span>
+                </div>
+                <div id="p2Result" class="modal-result-player">
+                    <p>Klaw</p>
+                    <span class="modal-result" id="finalProfitLossP2">0,00 PLN</span>
+                </div>
+            </div>
             <button class="btn btn-primary" onclick="resetGame()">Zagraj Ponownie</button>
         </div>
     </div>
 
+
     <script>
         // --- Game Configuration & Elements ---
+        let gameLoopTimeout;
+
+        // Player 1 (Mouse)
         const game = {
             cash: 10000, shares: 0, price: 100, volatility: 0.018, candles: [],
             timer: { remainingSeconds: 60, targetTime: 60, interval: null },
             initialPortfolioValue: null,
             avgBuyPrice: 0
         };
+
+        // Player 2 (Keyboard)
+        const player2 = {
+            cash: 10000, shares: 0,
+            initialPortfolioValue: null,
+            avgBuyPrice: 0
+        };
+
         const plnFormat = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
         let accentGreen, accentRed;
         const mainCanvas = document.getElementById('mainChartCanvas');
         const miniCanvas = document.getElementById('miniChartCanvas');
         const endGameModal = document.getElementById('endGameModal');
-        const finalProfitLossEl = document.getElementById('finalProfitLoss');
+        const mainChartPriceOverlayEl = document.getElementById('mainChartPriceOverlay');
+        const finalProfitLossP1El = document.getElementById('finalProfitLossP1');
+        const finalProfitLossP2El = document.getElementById('finalProfitLossP2');
+        const winnerMessageEl = document.getElementById('winnerMessage');
 
         // --- Candle Logic ---
         class Candle {
@@ -324,31 +353,50 @@
                 ctx.fillRect(x, Math.min(openY, closeY), candleWidth, Math.max(1, Math.abs(closeY - openY)));
             });
             
-            const lastCandle = visibleCandles[visibleCandles.length - 1];
-            ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'bottom';
-            const priceY = canvas.height - 5;
-            const priceX = canvas.width - 5;
-            
-            // Draw current price
-            const priceText = `${game.price.toLocaleString('pl-PL', plnFormat)} PLN`;
-            ctx.fillStyle = lastCandle.isBullish ? accentGreen : accentRed;
-            ctx.fillText(priceText, priceX, priceY);
+            const isMainChart = canvas.id === 'mainChartCanvas';
+            const isDesktop = window.innerWidth > 768;
 
-            // Draw purchase info if applicable
-            if (game.shares > 0 && game.avgBuyPrice > 0) {
-                const purchaseInfo = `${game.shares} @ ${game.avgBuyPrice.toLocaleString('pl-PL', plnFormat)} PLN`;
-                const priceTextMetrics = ctx.measureText(priceText);
-                const purchaseInfoX = priceX - priceTextMetrics.width - 15; // Position left of price with 15px gap
-                
-                ctx.fillStyle = '#FFFFFF'; // White color
-                ctx.fillText(purchaseInfo, purchaseInfoX, priceY);
+            if (isMainChart && isDesktop) {
+                const lineHeight = 22;
+                let currentY = canvas.height - 5;
+                ctx.font = 'bold 16px Arial'; // Changed font size
+                ctx.textAlign = 'right';
+                const textX = canvas.width - padding;
+
+                // Player 2 (Klaw)
+                if (player2.initialPortfolioValue !== null) {
+                    const p2TotalValue = player2.cash + (player2.shares * game.price);
+                    const p2Profit = p2TotalValue - player2.initialPortfolioValue;
+                    let p2Info;
+                    if (player2.shares > 0) {
+                        p2Info = `Klaw: ${player2.shares} @ ${player2.avgBuyPrice.toLocaleString('pl-PL', plnFormat)} | Z/S: ${p2Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+                    } else {
+                        p2Info = `Klaw: ${player2.shares} akcji | Z/S: ${p2Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+                    }
+                    ctx.fillStyle = '#FFFF00';
+                    ctx.fillText(p2Info, textX, currentY);
+                    currentY -= lineHeight;
+                }
+
+                // Player 1 (Mysz)
+                if (game.initialPortfolioValue !== null) {
+                    const p1TotalValue = game.cash + (game.shares * game.price);
+                    const p1Profit = p1TotalValue - game.initialPortfolioValue;
+                    let p1Info;
+                    if (game.shares > 0) {
+                        p1Info = `Mysz: ${game.shares} @ ${game.avgBuyPrice.toLocaleString('pl-PL', plnFormat)} | Z/S: ${p1Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+                    } else {
+                        p1Info = `Mysz: ${game.shares} akcji | Z/S: ${p1Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+                    }
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillText(p1Info, textX, currentY);
+                }
             }
         }
         
         // --- UI & Game Logic ---
         function updateDisplay() {
+            mainChartPriceOverlayEl.textContent = `${game.price.toLocaleString('pl-PL', plnFormat)} PLN`;
             const sharesValue = game.shares * game.price;
             const totalValue = game.cash + sharesValue;
             
@@ -384,102 +432,57 @@
             if(mainTimer) mainTimer.textContent = timeString;
         }
 
+        // --- Player 1 (Mouse) Actions ---
         function buyShares() {
+             if (game.timer.interval === null) return;
             const quantity = parseInt(document.getElementById('tradeQuantity').value);
             const cost = quantity * game.price;
             if (cost <= game.cash) {
                 const oldShares = game.shares;
                 const oldAvgPrice = game.avgBuyPrice;
 
-                if (oldShares === 0) {
-                    game.avgBuyPrice = game.price;
-                } else {
-                    game.avgBuyPrice = ((oldAvgPrice * oldShares) + (game.price * quantity)) / (oldShares + quantity);
-                }
-
+                game.avgBuyPrice = oldShares === 0 ? game.price : ((oldAvgPrice * oldShares) + (game.price * quantity)) / (oldShares + quantity);
                 game.cash -= cost;
                 game.shares += quantity;
                 updateDisplay();
             }
         }
         function sellShares() {
+             if (game.timer.interval === null) return;
             const quantity = parseInt(document.getElementById('tradeQuantity').value);
             if (quantity > 0 && game.shares >= quantity) {
                 game.cash += quantity * game.price;
                 game.shares -= quantity;
-                if (game.shares === 0) {
-                    game.avgBuyPrice = 0;
-                }
+                if (game.shares === 0) game.avgBuyPrice = 0;
                 updateDisplay();
             }
         }
-        
-        function startTimer() {
-            if (game.initialPortfolioValue === null) {
-                const initialCash = parseInt(document.getElementById('initialCash').value);
-                const initialShares = parseInt(document.getElementById('initialShares').value);
-                const initialPrice = game.candles.length > 0 ? game.candles[0].open : 100;
-                game.initialPortfolioValue = initialCash + (initialShares * initialPrice);
-                if (initialShares > 0) {
-                    game.avgBuyPrice = initialPrice;
-                }
+
+        // --- Player 2 (Keyboard) Actions ---
+        function buySharesP2() {
+            if (game.timer.interval === null) return;
+            const quantity = parseInt(document.getElementById('tradeQuantity').value);
+            const cost = quantity * game.price;
+            if (cost <= player2.cash) {
+                const oldShares = player2.shares;
+                const oldAvgPrice = player2.avgBuyPrice;
+
+                player2.avgBuyPrice = oldShares === 0 ? game.price : ((oldAvgPrice * oldShares) + (game.price * quantity)) / (oldShares + quantity);
+                player2.cash -= cost;
+                player2.shares += quantity;
             }
-
-            if (game.timer.interval || game.timer.remainingSeconds <= 0) return;
-            game.timer.interval = setInterval(() => {
-                game.timer.remainingSeconds--;
-                updateTimerDisplay();
-                if (game.timer.remainingSeconds <= 0) {
-                    pauseTimer();
-                    const finalPortfolioValue = game.cash + (game.shares * game.price);
-                    const profit = finalPortfolioValue - game.initialPortfolioValue;
-                    
-                    finalProfitLossEl.textContent = `${profit.toLocaleString('pl-PL', plnFormat)} PLN`;
-                    finalProfitLossEl.parentElement.classList.remove('profit', 'loss');
-                    if (profit >= 0) {
-                        finalProfitLossEl.parentElement.classList.add('profit');
-                    } else {
-                        finalProfitLossEl.parentElement.classList.add('loss');
-                    }
-                    endGameModal.style.display = 'flex';
-                }
-            }, 1000);
         }
-
-        function pauseTimer() { clearInterval(game.timer.interval); game.timer.interval = null; }
-        function resetTimer() { pauseTimer(); game.timer.remainingSeconds = game.timer.targetTime; updateTimerDisplay(); }
+        function sellSharesP2() {
+            if (game.timer.interval === null) return;
+            const quantity = parseInt(document.getElementById('tradeQuantity').value);
+            if (quantity > 0 && player2.shares >= quantity) {
+                player2.cash += quantity * game.price;
+                player2.shares -= quantity;
+                if (player2.shares === 0) player2.avgBuyPrice = 0;
+            }
+        }
         
-        function resetGame() {
-            endGameModal.style.display = 'none';
-            game.cash = parseInt(document.getElementById('initialCash').value);
-            game.shares = parseInt(document.getElementById('initialShares').value);
-            resetTimer();
-            game.initialPortfolioValue = null;
-            game.avgBuyPrice = 0;
-            document.getElementById('newsFeed').innerHTML = '';
-            game.candles = [];
-            for (let i = 0; i < 50; i++) game.candles.push(generateCandle());
-            game.price = game.candles[game.candles.length - 1].close;
-            updateDisplay();
-            drawChart(mainCanvas, 50);
-        }
-
-        const newsMessages = ["📈 Rekordowe zyski kwartalne", "📉 Konkurencja wprowadza nowy produkt", "📊 Analitycy podnoszą rekomendację", "🚨 CEO rezygnuje ze stanowiska", "💰 Nowy, duży kontrakt rządowy", "⚖️ Problemy regulacyjne w UE", "🚀 Opatentowano przełomową technologię", "📉 Spadek sprzedaży w kluczowym segmencie", "🤝 Fuzja z głównym rywalem ogłoszona", "⚡ Rosnące ceny energii zwiększają koszty", "🌍 Otwarcie nowej fabryki w Azji", "💡 Spółka rozpoczyna program skupu akcji", "⛔ Problemy w łańcuchu dostaw", "⭐ Produkt spółki otrzymał międzynarodową nagrodę", "📉 Rating kredytowy obniżony", "📈 Strategiczne partnerstwo z gigantem z USA", "🏢 Nowa polityka dywidendowa", "🌪️ Katastrofa naturalna niszczy oddział firmy", "📦 Dane o sprzedaży detalicznej powyżej oczekiwań", "🏛️ Rząd ogłasza program wsparcia dla branży", "🌱 Firma ogłasza ambitne cele ESG", "🤔 Wyniki zgodne z oczekiwaniami analityków"];
-        function addRandomNews() {
-            const news = newsMessages[Math.floor(Math.random() * newsMessages.length)]; const newsElement = document.createElement('div'); newsElement.className = 'news-item';
-            if (['📉', '🚨', '⚖️', '⚡', '⛔', '🌪️'].some(e => news.startsWith(e))) { newsElement.classList.add('news-negative'); }
-            newsElement.textContent = news; const feed = document.getElementById('newsFeed'); feed.insertBefore(newsElement, feed.firstChild); if (feed.children.length > 5) feed.removeChild(feed.lastChild);
-        }
-
-        document.getElementById('initialCash').addEventListener('input', e => { game.cash = parseInt(e.target.value); document.getElementById('initialCashValue').textContent = `${game.cash.toLocaleString('pl-PL', plnFormat)} PLN`; updateDisplay(); });
-        document.getElementById('initialShares').addEventListener('input', e => { game.shares = parseInt(e.target.value); document.getElementById('initialSharesValue').textContent = game.shares; updateDisplay(); });
-        document.getElementById('volatility').addEventListener('input', e => { const value = parseFloat(e.target.value); game.volatility = value / 100; document.getElementById('volatilityValue').textContent = `${value.toFixed(1)}%`; });
-        document.getElementById('tradeQuantity').addEventListener('input', e => { document.getElementById('tradeQuantityValue').textContent = e.target.value; updateDisplay(); });
-        document.getElementById('trainingTime').addEventListener('input', e => { const minutes = parseInt(e.target.value); game.timer.targetTime = minutes * 60; document.getElementById('trainingTimeValue').textContent = minutes; resetTimer(); });
-
-        window.addEventListener('resize', () => { resizeCanvas(mainCanvas); resizeCanvas(miniCanvas); });
-        
-        let gameLoopTimeout;
+        // --- Timer and Game State ---
         function gameLoop() {
             game.candles.push(generateCandle()); if (game.candles.length > 100) game.candles.shift();
             game.price = game.candles[game.candles.length - 1].close;
@@ -490,13 +493,129 @@
             gameLoopTimeout = setTimeout(gameLoop, 800);
         }
 
+        function startTimer() {
+             const initialCash = parseInt(document.getElementById('initialCash').value);
+             const initialShares = parseInt(document.getElementById('initialShares').value);
+             const initialPrice = game.candles.length > 0 ? game.candles[0].open : 100;
+            
+            if (game.initialPortfolioValue === null) {
+                game.initialPortfolioValue = initialCash + (initialShares * initialPrice);
+                if (initialShares > 0) game.avgBuyPrice = initialPrice;
+            }
+             if (player2.initialPortfolioValue === null) {
+                player2.initialPortfolioValue = initialCash + (initialShares * initialPrice);
+                if (initialShares > 0) player2.avgBuyPrice = initialPrice;
+            }
+
+            if (game.timer.interval) return;
+
+            clearTimeout(gameLoopTimeout);
+            gameLoop();
+
+            game.timer.interval = setInterval(() => {
+                game.timer.remainingSeconds--;
+                updateTimerDisplay();
+                if (game.timer.remainingSeconds <= 0) {
+                    pauseTimer();
+                    const profitP1 = (game.cash + (game.shares * game.price)) - game.initialPortfolioValue;
+                    const profitP2 = (player2.cash + (player2.shares * game.price)) - player2.initialPortfolioValue;
+                    
+                    finalProfitLossP1El.textContent = `${profitP1.toLocaleString('pl-PL', plnFormat)} PLN`;
+                    document.getElementById('p1Result').className = `modal-result-player ${profitP1 >= 0 ? 'profit' : 'loss'}`;
+                    
+                    finalProfitLossP2El.textContent = `${profitP2.toLocaleString('pl-PL', plnFormat)} PLN`;
+                     document.getElementById('p2Result').className = `modal-result-player ${profitP2 >= 0 ? 'profit' : 'loss'}`;
+                    
+                    let winnerText;
+                    if (profitP1.toFixed(2) === profitP2.toFixed(2)) {
+                        winnerText = 'Remis!';
+                    } else {
+                        const winner = profitP1 > profitP2 ? 'Mysz' : 'Klaw';
+                        const differenceInPLN = Math.abs(profitP1 - profitP2);
+                        winnerText = `${winner} wygrał/a o ${differenceInPLN.toLocaleString('pl-PL', plnFormat)} PLN!`;
+                    }
+
+                    winnerMessageEl.innerHTML = winnerText;
+                    endGameModal.style.display = 'flex';
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() { 
+            clearInterval(game.timer.interval); 
+            game.timer.interval = null; 
+            clearTimeout(gameLoopTimeout);
+        }
+        function resetTimer() { 
+            pauseTimer(); 
+            game.timer.remainingSeconds = game.timer.targetTime; 
+            updateTimerDisplay(); 
+        }
+        
+        function resetGame() {
+            endGameModal.style.display = 'none';
+            const initialCash = parseInt(document.getElementById('initialCash').value);
+            const initialShares = parseInt(document.getElementById('initialShares').value);
+            
+            game.cash = initialCash; game.shares = initialShares;
+            player2.cash = initialCash; player2.shares = initialShares;
+
+            resetTimer();
+            game.initialPortfolioValue = null; game.avgBuyPrice = 0;
+            player2.initialPortfolioValue = null; player2.avgBuyPrice = 0;
+
+            document.getElementById('newsFeed').innerHTML = '';
+            game.candles = [];
+            for (let i = 0; i < 50; i++) game.candles.push(generateCandle());
+            game.price = game.candles[game.candles.length - 1].close;
+            updateDisplay();
+            drawChart(mainCanvas, 50); 
+        }
+
+        // --- News Feed ---
+        const newsMessages = ["📈 Rekordowe zyski kwartalne", "📉 Konkurencja wprowadza nowy produkt", "📊 Analitycy podnoszą rekomendację", "🚨 CEO rezygnuje ze stanowiska", "💰 Nowy, duży kontrakt rządowy", "⚖️ Problemy regulacyjne w UE", "🚀 Opatentowano przełomową technologię", "📉 Spadek sprzedaży w kluczowym segmencie", "🤝 Fuzja z głównym rywalem ogłoszona", "⚡ Rosnące ceny energii zwiększają koszty", "🌍 Otwarcie nowej fabryki w Azji", "💡 Spółka rozpoczyna program skupu akcji", "⛔ Problemy w łańcuchu dostaw", "⭐ Produkt spółki otrzymał międzynarodową nagrodę", "📉 Rating kredytowy obniżony", "📈 Strategiczne partnerstwo z gigantem z USA", "🏢 Nowa polityka dywidendowa", "🌪️ Katastrofa naturalna niszczy oddział firmy", "📦 Dane o sprzedaży detalicznej powyżej oczekiwań", "🏛️ Rząd ogłasza program wsparcia dla branży", "🌱 Firma ogłasza ambitne cele ESG", "🤔 Wyniki zgodne z oczekiwaniami analityków"];
+        function addRandomNews() {
+            const news = newsMessages[Math.floor(Math.random() * newsMessages.length)]; const newsElement = document.createElement('div'); newsElement.className = 'news-item';
+            if (['📉', '🚨', '⚖️', '⚡', '⛔', '🌪️'].some(e => news.startsWith(e))) { newsElement.classList.add('news-negative'); }
+            newsElement.textContent = news; const feed = document.getElementById('newsFeed'); feed.insertBefore(newsElement, feed.firstChild); if (feed.children.length > 5) feed.removeChild(feed.lastChild);
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('initialCash').addEventListener('input', e => { 
+            const val = parseInt(e.target.value);
+            document.getElementById('initialCashValue').textContent = `${val.toLocaleString('pl-PL', plnFormat)} PLN`; 
+            if (game.timer.interval === null) { game.cash = val; player2.cash = val; updateDisplay(); }
+        });
+        document.getElementById('initialShares').addEventListener('input', e => { 
+            const val = parseInt(e.target.value);
+            document.getElementById('initialSharesValue').textContent = val; 
+             if (game.timer.interval === null) { game.shares = val; player2.shares = val; updateDisplay(); }
+        });
+        document.getElementById('volatility').addEventListener('input', e => { const value = parseFloat(e.target.value); game.volatility = value / 100; document.getElementById('volatilityValue').textContent = `${value.toFixed(1)}%`; });
+        document.getElementById('tradeQuantity').addEventListener('input', e => { document.getElementById('tradeQuantityValue').textContent = e.target.value; updateDisplay(); });
+        document.getElementById('trainingTime').addEventListener('input', e => { const minutes = parseInt(e.target.value); game.timer.targetTime = minutes * 60; document.getElementById('trainingTimeValue').textContent = minutes; resetTimer(); });
+
+        window.addEventListener('resize', () => { resizeCanvas(mainCanvas); resizeCanvas(miniCanvas); drawChart(mainCanvas, 50); });
+        
+        document.addEventListener('keydown', (event) => {
+            if (event.key.toLowerCase() === 'w') { buySharesP2(); } 
+            else if (event.key.toLowerCase() === 's') { sellSharesP2(); }
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
             const style = getComputedStyle(document.documentElement);
             accentGreen = style.getPropertyValue('--accent-green').trim(); accentRed = style.getPropertyValue('--accent-red').trim();
+            
+            const initialCashVal = parseInt(document.getElementById('initialCash').value);
+            const initialSharesVal = parseInt(document.getElementById('initialShares').value);
+            game.cash = initialCashVal; game.shares = initialSharesVal;
+            player2.cash = initialCashVal; player2.shares = initialSharesVal;
+
             for (let i = 0; i < 50; i++) game.candles.push(generateCandle());
             game.price = game.candles[game.candles.length - 1].close;
             resizeCanvas(mainCanvas); resizeCanvas(miniCanvas);
-            updateTimerDisplay(); updateDisplay(); gameLoop();
+            updateTimerDisplay(); updateDisplay();
+            drawChart(mainCanvas, 50);
         });
     </script>
 </body>
