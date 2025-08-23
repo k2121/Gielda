@@ -273,7 +273,8 @@
         const game = {
             cash: 10000, shares: 0, price: 100, volatility: 0.018, candles: [],
             timer: { remainingSeconds: 60, targetTime: 60, interval: null },
-            initialPortfolioValue: null
+            initialPortfolioValue: null,
+            avgBuyPrice: 0
         };
         const plnFormat = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
         let accentGreen, accentRed;
@@ -322,10 +323,28 @@
                 ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + candleWidth / 2, highY); ctx.lineTo(x + candleWidth / 2, lowY); ctx.stroke();
                 ctx.fillRect(x, Math.min(openY, closeY), candleWidth, Math.max(1, Math.abs(closeY - openY)));
             });
+            
             const lastCandle = visibleCandles[visibleCandles.length - 1];
-            ctx.font = 'bold 14px Arial'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            const priceY = canvas.height - 5;
+            const priceX = canvas.width - 5;
+            
+            // Draw current price
+            const priceText = `${game.price.toLocaleString('pl-PL', plnFormat)} PLN`;
             ctx.fillStyle = lastCandle.isBullish ? accentGreen : accentRed;
-            ctx.fillText(`${game.price.toLocaleString('pl-PL', plnFormat)} PLN`, canvas.width - 5, canvas.height - 5);
+            ctx.fillText(priceText, priceX, priceY);
+
+            // Draw purchase info if applicable
+            if (game.shares > 0 && game.avgBuyPrice > 0) {
+                const purchaseInfo = `${game.shares} @ ${game.avgBuyPrice.toLocaleString('pl-PL', plnFormat)} PLN`;
+                const priceTextMetrics = ctx.measureText(priceText);
+                const purchaseInfoX = priceX - priceTextMetrics.width - 15; // Position left of price with 15px gap
+                
+                ctx.fillStyle = '#FFFFFF'; // White color
+                ctx.fillText(purchaseInfo, purchaseInfoX, priceY);
+            }
         }
         
         // --- UI & Game Logic ---
@@ -365,8 +384,35 @@
             if(mainTimer) mainTimer.textContent = timeString;
         }
 
-        function buyShares() { const quantity = parseInt(document.getElementById('tradeQuantity').value); const cost = quantity * game.price; if (cost <= game.cash) { game.cash -= cost; game.shares += quantity; updateDisplay(); } }
-        function sellShares() { const quantity = parseInt(document.getElementById('tradeQuantity').value); if (quantity > 0 && game.shares >= quantity) { game.cash += quantity * game.price; game.shares -= quantity; updateDisplay(); } }
+        function buyShares() {
+            const quantity = parseInt(document.getElementById('tradeQuantity').value);
+            const cost = quantity * game.price;
+            if (cost <= game.cash) {
+                const oldShares = game.shares;
+                const oldAvgPrice = game.avgBuyPrice;
+
+                if (oldShares === 0) {
+                    game.avgBuyPrice = game.price;
+                } else {
+                    game.avgBuyPrice = ((oldAvgPrice * oldShares) + (game.price * quantity)) / (oldShares + quantity);
+                }
+
+                game.cash -= cost;
+                game.shares += quantity;
+                updateDisplay();
+            }
+        }
+        function sellShares() {
+            const quantity = parseInt(document.getElementById('tradeQuantity').value);
+            if (quantity > 0 && game.shares >= quantity) {
+                game.cash += quantity * game.price;
+                game.shares -= quantity;
+                if (game.shares === 0) {
+                    game.avgBuyPrice = 0;
+                }
+                updateDisplay();
+            }
+        }
         
         function startTimer() {
             if (game.initialPortfolioValue === null) {
@@ -374,6 +420,9 @@
                 const initialShares = parseInt(document.getElementById('initialShares').value);
                 const initialPrice = game.candles.length > 0 ? game.candles[0].open : 100;
                 game.initialPortfolioValue = initialCash + (initialShares * initialPrice);
+                if (initialShares > 0) {
+                    game.avgBuyPrice = initialPrice;
+                }
             }
 
             if (game.timer.interval || game.timer.remainingSeconds <= 0) return;
@@ -406,6 +455,7 @@
             game.shares = parseInt(document.getElementById('initialShares').value);
             resetTimer();
             game.initialPortfolioValue = null;
+            game.avgBuyPrice = 0;
             document.getElementById('newsFeed').innerHTML = '';
             game.candles = [];
             for (let i = 0; i < 50; i++) game.candles.push(generateCandle());
