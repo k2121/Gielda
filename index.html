@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symulator Giełdowy</title>
+    <style>
+        :root {
+            --primary-bg: #0a0a0a;
+            --secondary-bg: #1a1a1a;
+            --tertiary-bg: #2a2a2a;
+            --accent-green: #00c851;
+            --accent-red: #ff4444;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border-color: #333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: var(--primary-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        .container { max-width: 1600px; margin: 0 auto; padding: 10px; }
+
+        .header {
+            text-align: center; padding: 20px; background: var(--secondary-bg);
+            border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .header h1 {
+            font-size: 2.2rem; margin-bottom: 10px;
+            background: linear-gradient(45deg, var(--accent-green), var(--accent-red));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            grid-template-areas:
+                "left chart right"
+                "left market right";
+            grid-template-rows: auto 1fr; gap: 15px; align-items: stretch;
+        }
+
+        .left-panel { grid-area: left; }
+        .chart-container { grid-area: chart; }
+        .right-panel { grid-area: right; }
+        .market-card { grid-area: market; }
+
+        .card {
+            background: var(--secondary-bg); border-radius: 15px; padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color);
+            display: flex; flex-direction: column;
+        }
+        
+        .chart-container { position: relative; min-height: 400px; height: 520px; overflow: hidden; }
+        .left-panel, .right-panel { display: flex; flex-direction: column; gap: 15px; }
+
+        #mainChartCanvas, #miniChartCanvas { width: 100%; height: 100%; cursor: crosshair; }
+
+        .stat-item { background: var(--tertiary-bg); padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 10px; }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 3px; }
+        .stat-value { font-size: 1.1rem; font-weight: bold; }
+        .slider-container { margin: 12px 0; }
+        .slider-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.85rem; }
+
+        .slider { width: 100%; height: 5px; border-radius: 3px; background: var(--tertiary-bg); outline: none; -webkit-appearance: none; }
+        .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent-green); cursor: pointer; }
+        .button-group { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 12px 0; }
+
+        .btn {
+            padding: 12px; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: bold; cursor: pointer;
+            transition: all 0.3s ease; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .btn-primary { background: var(--accent-green); color: var(--primary-bg); }
+        .btn-secondary { background: var(--accent-red); color: white; }
+        .btn-tertiary { background: var(--tertiary-bg); color: var(--text-primary); }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .timer-display { text-align: center; font-size: 1.5rem; font-family: 'Courier New', monospace; padding: 15px; background: var(--tertiary-bg); border-radius: 10px; margin: 10px 0; }
+        .timer-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+        .news-feed { max-height: 150px; overflow-y: auto; padding: 8px; background: var(--tertiary-bg); border-radius: 10px; flex-grow: 1; }
+        .news-item { padding: 8px; margin-bottom: 6px; border-left: 3px solid var(--accent-green); background: rgba(0, 200, 81, 0.1); border-radius: 5px; font-size: 0.8rem; line-height: 1.3; }
+        .news-negative { border-left-color: var(--accent-red); background: rgba(255, 68, 68, 0.1); }
+        h3 { font-size: 1.1rem; margin-bottom: 12px; color: var(--text-primary); text-align: center; }
+
+        .mini-chart-container { display: none; }
+
+        .chart-timer-overlay {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background-color: rgba(10, 10, 10, 0.6);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* --- STYLES FOR END GAME MODAL --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background: var(--secondary-bg);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            width: 90%;
+            max-width: 400px;
+        }
+        .modal-content h2 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+        }
+        .modal-content .modal-subtitle {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: var(--text-secondary);
+        }
+        .modal-result {
+            font-size: 2.2rem;
+            font-weight: bold;
+            margin-bottom: 25px;
+        }
+        .profit { color: var(--accent-green); }
+        .loss { color: var(--accent-red); }
+        .modal-content .btn {
+            width: 100%;
+            font-size: 1rem;
+        }
+
+        @media (max-width: 1280px) { .main-layout { grid-template-columns: 250px 1fr 250px; } }
+        @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr 1fr; grid-template-areas: "chart chart" "market market" "left right"; } }
+        
+        @media (max-width: 768px) {
+            .right-panel { display: contents; }
+            #portfolioCard { grid-area: portfolio; }
+            #transactionsCard { grid-area: transactions; }
+            .mini-chart-container {
+                display: flex;
+                grid-area: minichart;
+                height: 250px;
+                min-height: 250px;
+                position: relative;
+            }
+            .main-layout {
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "left" "chart" "portfolio" "minichart" "transactions" "market";
+                grid-template-rows: auto;
+            }
+            .chart-container { height: 400px; }
+            .header h1 { font-size: 1.8rem; }
+            
+            .mobile-grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+            .mobile-grid-row .stat-item, .mobile-actions-grid .stat-item { margin-bottom: 0; }
+            #portfolioCard > .stat-item:first-of-type { margin-bottom: 8px; }
+            .mobile-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
+            .mobile-actions-grid .button-group { margin: 0; grid-template-columns: 1fr 1fr; height: 100%; }
+            .mobile-actions-grid .btn { height: 100%; }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 { font-size: 1.5rem; }
+            .container { padding: 5px; }
+            .card { padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Symulator Giełdowy</h1>
+            <p>Trenuj intuicję inwestycyjną z wykresem świecowym</p>
+        </div>
+        <div class="main-layout">
+            <div class="left-panel">
+                <div class="card">
+                    <h3>⚙️ Start</h3>
+                    <div class="slider-container"><div class="slider-label"><span>Gotówka</span><span id="initialCashValue">10 000,00 PLN</span></div><input type="range" class="slider" id="initialCash" min="1000" max="100000" value="10000" step="1000"></div>
+                    <div class="slider-container"><div class="slider-label"><span>Akcje początkowe</span><span id="initialSharesValue">0</span></div><input type="range" class="slider" id="initialShares" min="0" max="1000" value="0" step="10"></div>
+                    <div class="slider-container"><div class="slider-label"><span>Zmienność</span><span id="volatilityValue">1.8%</span></div><input type="range" class="slider" id="volatility" min="0.5" max="7.0" value="1.8" step="0.1"></div>
+                </div>
+                <div class="card">
+                    <h3>⏱️ Timer</h3>
+                    <div class="timer-display" id="timerDisplay">01:00</div>
+                    <div class="timer-controls"><button class="btn btn-tertiary" onclick="startTimer()">▶️</button><button class="btn btn-tertiary" onclick="pauseTimer()">⏸️</button><button class="btn btn-tertiary" onclick="resetTimer()">🔄</button></div>
+                    <div class="slider-container"><div class="slider-label"><span>Czas (min)</span><span id="trainingTimeValue">1</span></div><input type="range" class="slider" id="trainingTime" min="1" max="60" value="1" step="1"></div>
+                </div>
+            </div>
+            <div class="chart-container card">
+                <canvas id="mainChartCanvas"></canvas>
+            </div>
+            <div class="card market-card">
+                <h3>📰 Rynek</h3><div class="news-feed" id="newsFeed"></div>
+            </div>
+            <div class="right-panel">
+                <div class="card" id="portfolioCard">
+                    <h3>💰 Portfel</h3>
+                    <div class="stat-item"><div class="stat-label">Gotówka</div><div class="stat-value" id="cashDisplay">10 000,00 PLN</div></div>
+                    <div class="mobile-grid-row">
+                        <div class="stat-item"><div class="stat-label">Akcje</div><div class="stat-value" id="sharesDisplay">0</div></div>
+                        <div class="stat-item"><div class="stat-label">Wartość akcji</div><div class="stat-value" id="sharesValue">0,00 PLN</div></div>
+                    </div>
+                    <div class="mobile-grid-row">
+                        <div class="stat-item"><div class="stat-label">Całkowita wartość</div><div class="stat-value" id="totalValue">10 000,00 PLN</div></div>
+                        <div class="stat-item"><div class="stat-label">Zysk/Strata</div><div class="stat-value" id="profitLoss">0,00 PLN</div></div>
+                    </div>
+                </div>
+                
+                <div class="mini-chart-container card">
+                    <div id="miniChartTimerDisplay" class="chart-timer-overlay"></div>
+                    <canvas id="miniChartCanvas"></canvas>
+                </div>
+
+                <div class="card" id="transactionsCard">
+                    <h3>🎯 Transakcje</h3>
+                    <div class="slider-container"><div class="slider-label"><span>Ilość</span><span id="tradeQuantityValue">85</span></div><input type="range" class="slider" id="tradeQuantity" min="1" max="100" value="85" step="1"></div>
+                    <div class="mobile-actions-grid">
+                         <div class="stat-item"><div class="stat-label">Aktualna cena</div><div class="stat-value" id="currentPrice">100,00 PLN</div></div>
+                         <div class="button-group"><button class="btn btn-primary" id="buyBtn" onclick="buyShares()">📈 Kup</button><button class="btn btn-secondary" id="sellBtn" onclick="sellShares()">📉 Sprzedaj</button></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: End Game Modal -->
+    <div id="endGameModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Koniec Czasu!</h2>
+            <p class="modal-subtitle">Twój ostateczny wynik:</p>
+            <p class="modal-result"><span id="finalProfitLoss">0,00 PLN</span></p>
+            <button class="btn btn-primary" onclick="resetGame()">Zagraj Ponownie</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Configuration & Elements ---
+        const game = {
+            cash: 10000, shares: 0, price: 100, volatility: 0.018, candles: [],
+            timer: { remainingSeconds: 60, targetTime: 60, interval: null },
+            initialPortfolioValue: null
+        };
+        const plnFormat = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+        let accentGreen, accentRed;
+        const mainCanvas = document.getElementById('mainChartCanvas');
+        const miniCanvas = document.getElementById('miniChartCanvas');
+        const endGameModal = document.getElementById('endGameModal');
+        const finalProfitLossEl = document.getElementById('finalProfitLoss');
+
+        // --- Candle Logic ---
+        class Candle {
+            constructor(open, close, high, low) { this.open = open; this.close = close; this.high = high; this.low = low; }
+            get isBullish() { return this.close > this.open; }
+        }
+        function generateCandle() {
+            const lastPrice = game.candles.length > 0 ? game.candles[game.candles.length - 1].close : game.price;
+            const change = (Math.random() - 0.5) * game.volatility * lastPrice * 2;
+            const open = lastPrice;
+            const close = Math.max(0.1, open + change);
+            const high = Math.max(open, close) + Math.random() * game.volatility * lastPrice;
+            const low = Math.min(open, close) - Math.random() * game.volatility * lastPrice;
+            return new Candle(open, close, high, low);
+        }
+
+        // --- Chart Drawing ---
+        function resizeCanvas(canvas) {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth; canvas.height = container.clientHeight;
+        }
+        function drawChart(canvas, candlesToShow) {
+            const ctx = canvas.getContext('2d');
+            if (!canvas.width || !canvas.height) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const padding = 20, chartWidth = canvas.width - padding * 1.5, chartHeight = canvas.height - padding * 2;
+            const visibleCandles = game.candles.slice(-candlesToShow);
+            if (visibleCandles.length === 0) return;
+            const minPrice = Math.min(...visibleCandles.map(c => c.low)), maxPrice = Math.max(...visibleCandles.map(c => c.high)), priceRange = maxPrice - minPrice || 1;
+            const candleWidth = Math.max(2, chartWidth / visibleCandles.length - 2);
+            visibleCandles.forEach((candle, index) => {
+                const x = padding + index * (chartWidth / visibleCandles.length);
+                const openY = canvas.height - padding - ((candle.open - minPrice) / priceRange * chartHeight);
+                const closeY = canvas.height - padding - ((candle.close - minPrice) / priceRange * chartHeight);
+                const highY = canvas.height - padding - ((candle.high - minPrice) / priceRange * chartHeight);
+                const lowY = canvas.height - padding - ((candle.low - minPrice) / priceRange * chartHeight);
+                ctx.fillStyle = candle.isBullish ? accentGreen : accentRed;
+                ctx.strokeStyle = candle.isBullish ? accentGreen : accentRed;
+                ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + candleWidth / 2, highY); ctx.lineTo(x + candleWidth / 2, lowY); ctx.stroke();
+                ctx.fillRect(x, Math.min(openY, closeY), candleWidth, Math.max(1, Math.abs(closeY - openY)));
+            });
+            const lastCandle = visibleCandles[visibleCandles.length - 1];
+            ctx.font = 'bold 14px Arial'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+            ctx.fillStyle = lastCandle.isBullish ? accentGreen : accentRed;
+            ctx.fillText(`${game.price.toLocaleString('pl-PL', plnFormat)} PLN`, canvas.width - 5, canvas.height - 5);
+        }
+        
+        // --- UI & Game Logic ---
+        function updateDisplay() {
+            const sharesValue = game.shares * game.price;
+            const totalValue = game.cash + sharesValue;
+            
+            const initialValue = game.initialPortfolioValue !== null
+                ? game.initialPortfolioValue
+                : parseInt(document.getElementById('initialCash').value) + (parseInt(document.getElementById('initialShares').value) * (game.candles[0]?.open || 100));
+            
+            const profit = totalValue - initialValue;
+
+            document.getElementById('cashDisplay').textContent = `${game.cash.toLocaleString('pl-PL', plnFormat)} PLN`;
+            document.getElementById('sharesDisplay').textContent = game.shares;
+            document.getElementById('sharesValue').textContent = `${sharesValue.toLocaleString('pl-PL', plnFormat)} PLN`;
+            document.getElementById('totalValue').textContent = `${totalValue.toLocaleString('pl-PL', plnFormat)} PLN`;
+            document.getElementById('currentPrice').textContent = `${game.price.toLocaleString('pl-PL', plnFormat)} PLN`;
+            const profitElement = document.getElementById('profitLoss');
+            profitElement.textContent = `${profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+            profitElement.style.color = profit >= 0 ? accentGreen : accentRed;
+            const quantity = parseInt(document.getElementById('tradeQuantity').value);
+            document.getElementById('buyBtn').disabled = game.cash < game.price * quantity;
+            document.getElementById('sellBtn').disabled = game.shares < quantity;
+        }
+        
+        function updateTimerDisplay() {
+            const minutes = Math.floor(game.timer.remainingSeconds / 60);
+            const seconds = game.timer.remainingSeconds % 60;
+            const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            document.getElementById('timerDisplay').textContent = timeString;
+            const miniTimer = document.getElementById('miniChartTimerDisplay');
+            if (miniTimer) miniTimer.textContent = timeString;
+        }
+
+        function buyShares() { const quantity = parseInt(document.getElementById('tradeQuantity').value); const cost = quantity * game.price; if (cost <= game.cash) { game.cash -= cost; game.shares += quantity; updateDisplay(); } }
+        function sellShares() { const quantity = parseInt(document.getElementById('tradeQuantity').value); if (quantity > 0 && game.shares >= quantity) { game.cash += quantity * game.price; game.shares -= quantity; updateDisplay(); } }
+        
+        function startTimer() {
+            if (game.initialPortfolioValue === null) {
+                const initialCash = parseInt(document.getElementById('initialCash').value);
+                const initialShares = parseInt(document.getElementById('initialShares').value);
+                const initialPrice = game.candles.length > 0 ? game.candles[0].open : 100;
+                game.initialPortfolioValue = initialCash + (initialShares * initialPrice);
+            }
+
+            if (game.timer.interval || game.timer.remainingSeconds <= 0) return;
+            game.timer.interval = setInterval(() => {
+                game.timer.remainingSeconds--;
+                updateTimerDisplay();
+                if (game.timer.remainingSeconds <= 0) {
+                    pauseTimer();
+                    const finalPortfolioValue = game.cash + (game.shares * game.price);
+                    const profit = finalPortfolioValue - game.initialPortfolioValue;
+                    
+                    finalProfitLossEl.textContent = `${profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+                    finalProfitLossEl.parentElement.classList.remove('profit', 'loss');
+                    if (profit >= 0) {
+                        finalProfitLossEl.parentElement.classList.add('profit');
+                    } else {
+                        finalProfitLossEl.parentElement.classList.add('loss');
+                    }
+                    endGameModal.style.display = 'flex';
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() { clearInterval(game.timer.interval); game.timer.interval = null; }
+        function resetTimer() { pauseTimer(); game.timer.remainingSeconds = game.timer.targetTime; updateTimerDisplay(); }
+        
+        function resetGame() {
+            endGameModal.style.display = 'none';
+            game.cash = parseInt(document.getElementById('initialCash').value);
+            game.shares = parseInt(document.getElementById('initialShares').value);
+            resetTimer();
+            game.initialPortfolioValue = null;
+            document.getElementById('newsFeed').innerHTML = '';
+            game.candles = [];
+            for (let i = 0; i < 50; i++) game.candles.push(generateCandle());
+            game.price = game.candles[game.candles.length - 1].close;
+            updateDisplay();
+            drawChart(mainCanvas, 50);
+        }
+
+        const newsMessages = ["📈 Rekordowe zyski kwartalne", "📉 Konkurencja wprowadza nowy produkt", "📊 Analitycy podnoszą rekomendację", "🚨 CEO rezygnuje ze stanowiska", "💰 Nowy, duży kontrakt rządowy", "⚖️ Problemy regulacyjne w UE", "🚀 Opatentowano przełomową technologię", "📉 Spadek sprzedaży w kluczowym segmencie", "🤝 Fuzja z głównym rywalem ogłoszona", "⚡ Rosnące ceny energii zwiększają koszty", "🌍 Otwarcie nowej fabryki w Azji", "💡 Spółka rozpoczyna program skupu akcji", "⛔ Problemy w łańcuchu dostaw", "⭐ Produkt spółki otrzymał międzynarodową nagrodę", "📉 Rating kredytowy obniżony", "📈 Strategiczne partnerstwo z gigantem z USA", "🏢 Nowa polityka dywidendowa", "🌪️ Katastrofa naturalna niszczy oddział firmy", "📦 Dane o sprzedaży detalicznej powyżej oczekiwań", "🏛️ Rząd ogłasza program wsparcia dla branży", "🌱 Firma ogłasza ambitne cele ESG", "🤔 Wyniki zgodne z oczekiwaniami analityków"];
+        function addRandomNews() {
+            const news = newsMessages[Math.floor(Math.random() * newsMessages.length)]; const newsElement = document.createElement('div'); newsElement.className = 'news-item';
+            if (['📉', '🚨', '⚖️', '⚡', '⛔', '🌪️'].some(e => news.startsWith(e))) { newsElement.classList.add('news-negative'); }
+            newsElement.textContent = news; const feed = document.getElementById('newsFeed'); feed.insertBefore(newsElement, feed.firstChild); if (feed.children.length > 5) feed.removeChild(feed.lastChild);
+        }
+
+        document.getElementById('initialCash').addEventListener('input', e => { game.cash = parseInt(e.target.value); document.getElementById('initialCashValue').textContent = `${game.cash.toLocaleString('pl-PL', plnFormat)} PLN`; updateDisplay(); });
+        document.getElementById('initialShares').addEventListener('input', e => { game.shares = parseInt(e.target.value); document.getElementById('initialSharesValue').textContent = game.shares; updateDisplay(); });
+        document.getElementById('volatility').addEventListener('input', e => { const value = parseFloat(e.target.value); game.volatility = value / 100; document.getElementById('volatilityValue').textContent = `${value.toFixed(1)}%`; });
+        document.getElementById('tradeQuantity').addEventListener('input', e => { document.getElementById('tradeQuantityValue').textContent = e.target.value; updateDisplay(); });
+        document.getElementById('trainingTime').addEventListener('input', e => { const minutes = parseInt(e.target.value); game.timer.targetTime = minutes * 60; document.getElementById('trainingTimeValue').textContent = minutes; resetTimer(); });
+
+        window.addEventListener('resize', () => { resizeCanvas(mainCanvas); resizeCanvas(miniCanvas); });
+        
+        let gameLoopTimeout;
+        function gameLoop() {
+            game.candles.push(generateCandle()); if (game.candles.length > 100) game.candles.shift();
+            game.price = game.candles[game.candles.length - 1].close;
+            drawChart(mainCanvas, 50);
+            if (miniCanvas.offsetParent !== null) { drawChart(miniCanvas, 15); }
+            updateDisplay();
+            if (Math.random() < 0.08) addRandomNews();
+            gameLoopTimeout = setTimeout(gameLoop, 800);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const style = getComputedStyle(document.documentElement);
+            accentGreen = style.getPropertyValue('--accent-green').trim(); accentRed = style.getPropertyValue('--accent-red').trim();
+            for (let i = 0; i < 50; i++) game.candles.push(generateCandle());
+            game.price = game.candles[game.candles.length - 1].close;
+            resizeCanvas(mainCanvas); resizeCanvas(miniCanvas);
+            updateTimerDisplay(); updateDisplay(); gameLoop();
+        });
+    </script>
+</body>
+</html>
