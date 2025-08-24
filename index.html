@@ -26,17 +26,7 @@
             overflow-x: hidden;
         }
 
-        .container { max-width: 1600px; margin: 0 auto; padding: 10px; }
-
-        .header {
-            text-align: center; padding: 20px; background: var(--secondary-bg);
-            border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-        .header h1 {
-            font-size: 2.2rem; margin-bottom: 10px;
-            background: linear-gradient(45deg, var(--accent-green), var(--accent-red));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
+        .container { max-width: 1600px; margin: 20px auto; padding: 10px; }
 
         .main-layout {
             display: grid;
@@ -53,7 +43,7 @@
         .market-card { grid-area: market; }
 
         .card {
-            background: var(--secondary-bg); border-radius: 15px; padding: 15px;
+            background: var(--secondary-bg); border-radius: 15px; padding: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); border: 1px solid var(--border-color);
             display: flex; flex-direction: column;
         }
@@ -64,6 +54,7 @@
         #mainChartCanvas, #miniChartCanvas { width: 100%; height: 100%; cursor: crosshair; }
 
         .stat-item { background: var(--tertiary-bg); padding: 12px; border-radius: 10px; text-align: center; margin-bottom: 10px; }
+        .card > *:last-child {margin-bottom: 0;}
         .stat-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 3px; }
         .stat-value { font-size: 1.1rem; font-weight: bold; }
         .slider-container { margin: 12px 0; }
@@ -95,21 +86,31 @@
 
         .chart-overlay {
             position: absolute;
-            background-color: rgba(10, 10, 10, 0.6);
+            background-color: rgba(10, 10, 10, 0.7);
             color: var(--text-primary);
-            padding: 4px 8px;
+            padding: 5px 10px;
             border-radius: 8px;
             font-family: 'Courier New', monospace;
-            font-size: 1rem;
             z-index: 10;
             pointer-events: none;
-            right: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: fit-content;
+            text-align: center;
+            white-space: nowrap;
         }
 
-        #miniChartTimerDisplay { top: 10px; }
-        #mainChartTimerOverlay { bottom: 80px; }
-        #mainChartPriceOverlay { bottom: 105px; font-size: 1.1rem; font-weight: bold;}
+        #miniChartTimerDisplay { top: 10px; right: 10px; left: auto; transform: none; }
 
+        #mainChartPriceOverlay {
+            bottom: 45px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        #mainChartTimerOverlay {
+            bottom: 15px;
+            font-size: 1.1rem;
+        }
 
         /* --- STYLES FOR END GAME MODAL --- */
         .modal-overlay {
@@ -164,7 +165,18 @@
             font-size: 1rem;
             margin-top: 10px;
         }
-
+        
+        .mobile-grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        /* Usuwa dolny margines z ostatniego elementu w dowolnej karcie */
+        .card > *:last-child {
+        margin-bottom: 0;
+}
+        /* Usuwa dolny margines z problematycznych elementów, 
+           jeśli znajdują się wewnątrz ostatniego elementu w karcie */
+        .card > *:last-child .stat-item,
+        .card > *:last-child .button-group {
+        margin-bottom: 0;
+}
         @media (max-width: 1280px) { .main-layout { grid-template-columns: 250px 1fr 250px; } }
         @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr 1fr; grid-template-areas: "chart chart" "market market" "left right"; } }
         
@@ -186,9 +198,7 @@
                 grid-template-rows: auto;
             }
             .chart-container { height: 400px; }
-            .header h1 { font-size: 1.8rem; }
             
-            .mobile-grid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
             .mobile-grid-row .stat-item, .mobile-actions-grid .stat-item { margin-bottom: 0; }
             #portfolioCard > .stat-item:first-of-type { margin-bottom: 8px; }
             .mobile-actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: stretch; }
@@ -197,7 +207,6 @@
         }
 
         @media (max-width: 480px) {
-            .header h1 { font-size: 1.5rem; }
             .container { padding: 5px; }
             .card { padding: 12px; }
             .modal-result-container { flex-direction: column; }
@@ -206,10 +215,6 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📈 Symulator Giełdowy</h1>
-            <p>Trenuj intuicję inwestycyjną z wykresem świecowym</p>
-        </div>
         <div class="main-layout">
             <div class="left-panel">
                 <div class="card">
@@ -241,9 +246,10 @@
                         <div class="stat-item"><div class="stat-label">Akcje</div><div class="stat-value" id="sharesDisplay">0</div></div>
                         <div class="stat-item"><div class="stat-label">Wartość akcji</div><div class="stat-value" id="sharesValue">0,00 PLN</div></div>
                     </div>
-                    <div class="mobile-grid-row">
-                        <div class="stat-item"><div class="stat-label">Całkowita wartość</div><div class="stat-value" id="totalValue">10 000,00 PLN</div></div>
-                        <div class="stat-item"><div class="stat-label">Zysk/Strata</div><div class="stat-value" id="profitLoss">0,00 PLN</div></div>
+                    <div class="stat-item"><div class="stat-label">Całkowita wartość</div><div class="stat-value" id="totalValue">10 000,00 PLN</div></div>
+                     <div class="mobile-grid-row">
+                        <div class="stat-item"><div class="stat-label">Zysk M</div><div class="stat-value" id="profitLoss">0,00 PLN</div></div>
+                        <div class="stat-item"><div class="stat-label">Zysk K</div><div class="stat-value" id="profitLossP2">0,00 PLN</div></div>
                     </div>
                 </div>
                 
@@ -352,58 +358,18 @@
                 ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + candleWidth / 2, highY); ctx.lineTo(x + candleWidth / 2, lowY); ctx.stroke();
                 ctx.fillRect(x, Math.min(openY, closeY), candleWidth, Math.max(1, Math.abs(closeY - openY)));
             });
-            
-            const isMainChart = canvas.id === 'mainChartCanvas';
-            const isDesktop = window.innerWidth > 768;
-
-            if (isMainChart && isDesktop) {
-                const lineHeight = 22;
-                let currentY = canvas.height - 5;
-                ctx.font = 'bold 16px Arial'; // Changed font size
-                ctx.textAlign = 'right';
-                const textX = canvas.width - padding;
-
-                // Player 2 (Klaw)
-                if (player2.initialPortfolioValue !== null) {
-                    const p2TotalValue = player2.cash + (player2.shares * game.price);
-                    const p2Profit = p2TotalValue - player2.initialPortfolioValue;
-                    let p2Info;
-                    if (player2.shares > 0) {
-                        p2Info = `Klaw: ${player2.shares} @ ${player2.avgBuyPrice.toLocaleString('pl-PL', plnFormat)} | Z/S: ${p2Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
-                    } else {
-                        p2Info = `Klaw: ${player2.shares} akcji | Z/S: ${p2Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
-                    }
-                    ctx.fillStyle = '#FFFF00';
-                    ctx.fillText(p2Info, textX, currentY);
-                    currentY -= lineHeight;
-                }
-
-                // Player 1 (Mysz)
-                if (game.initialPortfolioValue !== null) {
-                    const p1TotalValue = game.cash + (game.shares * game.price);
-                    const p1Profit = p1TotalValue - game.initialPortfolioValue;
-                    let p1Info;
-                    if (game.shares > 0) {
-                        p1Info = `Mysz: ${game.shares} @ ${game.avgBuyPrice.toLocaleString('pl-PL', plnFormat)} | Z/S: ${p1Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
-                    } else {
-                        p1Info = `Mysz: ${game.shares} akcji | Z/S: ${p1Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
-                    }
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillText(p1Info, textX, currentY);
-                }
-            }
         }
         
         // --- UI & Game Logic ---
         function updateDisplay() {
             mainChartPriceOverlayEl.textContent = `${game.price.toLocaleString('pl-PL', plnFormat)} PLN`;
+            
+            // Player 1 (Mysz) calculations
             const sharesValue = game.shares * game.price;
             const totalValue = game.cash + sharesValue;
-            
             const initialValue = game.initialPortfolioValue !== null
                 ? game.initialPortfolioValue
                 : parseInt(document.getElementById('initialCash').value) + (parseInt(document.getElementById('initialShares').value) * (game.candles[0]?.open || 100));
-            
             const profit = totalValue - initialValue;
 
             document.getElementById('cashDisplay').textContent = `${game.cash.toLocaleString('pl-PL', plnFormat)} PLN`;
@@ -411,9 +377,24 @@
             document.getElementById('sharesValue').textContent = `${sharesValue.toLocaleString('pl-PL', plnFormat)} PLN`;
             document.getElementById('totalValue').textContent = `${totalValue.toLocaleString('pl-PL', plnFormat)} PLN`;
             document.getElementById('currentPrice').textContent = `${game.price.toLocaleString('pl-PL', plnFormat)} PLN`;
+            
             const profitElement = document.getElementById('profitLoss');
             profitElement.textContent = `${profit.toLocaleString('pl-PL', plnFormat)} PLN`;
             profitElement.style.color = profit >= 0 ? accentGreen : accentRed;
+
+            // Player 2 (Klaw) calculations
+            const p2TotalValue = player2.cash + (player2.shares * game.price);
+            const p2InitialValue = player2.initialPortfolioValue !== null
+                ? player2.initialPortfolioValue
+                : parseInt(document.getElementById('initialCash').value) + (parseInt(document.getElementById('initialShares').value) * (game.candles[0]?.open || 100));
+            const p2Profit = p2TotalValue - p2InitialValue;
+            
+            const profitP2Element = document.getElementById('profitLossP2');
+            if (profitP2Element) {
+                profitP2Element.textContent = `${p2Profit.toLocaleString('pl-PL', plnFormat)} PLN`;
+                profitP2Element.style.color = p2Profit >= 0 ? accentGreen : accentRed;
+            }
+
             const quantity = parseInt(document.getElementById('tradeQuantity').value);
             document.getElementById('buyBtn').disabled = game.cash < game.price * quantity;
             document.getElementById('sellBtn').disabled = game.shares < quantity;
